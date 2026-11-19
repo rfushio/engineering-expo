@@ -1,15 +1,18 @@
 import { Connection } from './connection';
-import { CONTROL_POINTS, IDLE, type Input, type PlayerId, type Snapshot } from '../shared/protocol';
+import { bindControllerInput } from './controller-input';
+import { CONTROL_POINTS, type PlayerId, type Snapshot } from '../shared/protocol';
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s)!;
 export function mountController() {
   document.body.className = 'controller';
+  document.documentElement.classList.add('controller-page');
+  document.querySelector('meta[name=viewport]')?.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
   const room = new URLSearchParams(location.search).get('room') ?? '';
   const storageKey = `jiku-player-${room}`;
   const read = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
   const write = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch {} };
   let token = read(storageKey) ?? undefined;
   $('#app').innerHTML = `<main class="phone-shell">
-    <header class="phone-header"><div class="phone-brand"><span class="brand-mark">磁</span><b>磁区バトル</b></div><div class="phone-identity"><span id="phone-player">接続中</span><span id="phone-color">YOUR MAGNET</span></div><div class="phone-tools"><span id="phone-connection">接続中…</span><button id="swap" aria-label="左右の配置を交換">左右交換 ⇄</button></div></header>
+    <header class="phone-header"><div class="phone-brand"><span class="brand-mark">磁</span><b>磁区バトル</b></div><div class="phone-identity"><span id="phone-player">接続中</span><span id="phone-color">YOUR MAGNET</span></div><div class="phone-tools"><span id="phone-connection">接続中…</span><button id="input-reset" aria-label="移動と磁場の操作を解除">操作解除</button><button id="swap" aria-label="左右の配置を交換">左右交換 ⇄</button></div></header>
     <div id="phone-objective" class="phone-objective" hidden><strong id="phone-control-score"></strong><div>${CONTROL_POINTS.map(p => `<span id="phone-point-${p.id}" class="phone-point">${p.id} · 中立</span>`).join('')}</div></div>
     <section class="phone-controls" aria-label="磁石の操作"><div id="move-zone" class="move-zone" aria-label="移動用スティック"><div class="zone-label"><span>MOVE</span><h1>ここをなぞって移動</h1><p>触れたところが、スティックの中心。</p></div><div class="joystick-guide"><span>↑</span><span>←</span><i></i><span>→</span><span>↓</span></div><div id="stick" class="stick" hidden><div id="stick-knob"></div></div><span class="control-footnote">離すと止まる</span></div><div class="field-zone"><button id="field-button" aria-label="磁場をかける"><span class="field-button-content"><span class="field-symbol">＋</span><strong>磁場</strong><small>押し続ける</small></span></button><span id="field-help">離すとエネルギーが回復</span></div></section>
     <footer class="phone-footer"><span id="phone-instruction">PCの盤面を見ながら操作しよう</span><div class="phone-energy"><span>ENERGY</span><div><i id="phone-energy-bar"></i></div><b id="phone-energy-text">100%</b></div></footer>
@@ -17,57 +20,27 @@ export function mountController() {
     <div class="rotate-overlay"><div class="rotate-phone">↻</div><h2>スマホを横向きに</h2><p>左手で動かして、右手で磁場をかけます。<br>画面の回転ロックを解除してください。</p></div>
   </main>`;
   let player: PlayerId | undefined, state: Snapshot | undefined, fatalText = '';
-  let input: Input = IDLE(), movePointer: number | null = null, fieldPointer: number | null = null;
-  let center = { x: 0, y: 0 }, radius = 50;
   const connection = new Connection(() => ({ type: 'hello', role: 'controller', room, token }));
   const move = $('#move-zone'), stick = $('#stick'), knob = $('#stick-knob'), button = $<HTMLButtonElement>('#field-button');
-  function clearTouches() {
-    if (movePointer !== null && move.hasPointerCapture(movePointer)) move.releasePointerCapture(movePointer);
-    if (fieldPointer !== null && button.hasPointerCapture(fieldPointer)) button.releasePointerCapture(fieldPointer);
-    movePointer = fieldPointer = null; input = IDLE(); stick.hidden = true; button.classList.remove('pressed'); move.classList.remove('moving');
-    connection.send({ type: 'input', ...input });
-  }
-  const canPlay = () => connection.connected && state?.phase === 'playing' && player !== undefined && state.participants.includes(player) && innerWidth > innerHeight;
-  function updateStick(event: PointerEvent) {
-    const dx = event.clientX - center.x, dy = event.clientY - center.y, length = Math.hypot(dx, dy);
-    const fraction = Math.min(1, length / radius), strength = Math.max(0, (fraction - 0.12) / 0.88);
-    input.x = length ? dx / length * strength : 0; input.y = length ? dy / length * strength : 0;
-    const scale = length > radius ? radius / length : 1;
-    knob.style.transform = `translate(${dx * scale}px, ${dy * scale}px)`;
-  }
-  move.addEventListener('pointerdown', event => {
-    if (!canPlay() || movePointer !== null) return;
-    event.preventDefault(); movePointer = event.pointerId; move.setPointerCapture(event.pointerId);
-    center = { x: event.clientX, y: event.clientY }; radius = Math.min(55, move.clientHeight * 0.23);
-    const rect = move.getBoundingClientRect();
-    stick.style.left = `${center.x - rect.left}px`; stick.style.top = `${center.y - rect.top}px`;
-    stick.style.width = stick.style.height = `${radius * 2}px`;
-    stick.hidden = false; move.classList.add('moving'); updateStick(event);
-  });
-  move.addEventListener('pointermove', event => { if (event.pointerId === movePointer) { event.preventDefault(); updateStick(event); } });
-  function releaseMove(event: PointerEvent) {
-    if (event.pointerId !== movePointer) return;
-    movePointer = null; input.x = input.y = 0; stick.hidden = true; move.classList.remove('moving');
-    connection.send({ type: 'input', ...input });
-  }
-  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) move.addEventListener(event, releaseMove as EventListener);
-  button.addEventListener('pointerdown', event => {
-    if (!canPlay() || fieldPointer !== null) return;
-    event.preventDefault(); fieldPointer = event.pointerId; button.setPointerCapture(event.pointerId);
-    input.field = true; button.classList.add('pressed');
-  });
-  function releaseField(event: PointerEvent) {
-    if (event.pointerId !== fieldPointer) return;
-    fieldPointer = null; input.field = false; button.classList.remove('pressed'); connection.send({ type: 'input', ...input });
-  }
-  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) button.addEventListener(event, releaseField as EventListener);
-  setInterval(() => { if (connection.connected && !document.hidden) connection.send({ type: 'input', ...input }); }, 1000 / 30);
-  document.addEventListener('contextmenu', event => event.preventDefault());
-  document.addEventListener('visibilitychange', () => { clearTouches(); connection.send({ type: 'visibility', visible: !document.hidden }); });
+  const landscape = () => matchMedia('(orientation: landscape)').matches;
+  const available = () => !document.hidden && landscape();
+  const canPlay = () => connection.connected && available() && state?.phase === 'playing' && player !== undefined && state.players[player].available && state.participants.includes(player);
+  const controls = bindControllerInput(move, button, stick, knob, canPlay, input => connection.send({ type: 'input', ...input }));
+  const clearTouches = controls.clear;
+  setInterval(() => {
+    if (!canPlay()) clearTouches();
+    else connection.send({ type: 'input', ...controls.read() });
+  }, 1000 / 30);
+  function updateAvailability() { clearTouches(); connection.send({ type: 'visibility', visible: available() }); }
+  document.addEventListener('visibilitychange', updateAvailability);
   window.addEventListener('pagehide', () => { clearTouches(); connection.send({ type: 'visibility', visible: false }); });
-  window.addEventListener('pageshow', () => connection.send({ type: 'visibility', visible: !document.hidden }));
+  window.addEventListener('pageshow', updateAvailability);
   window.addEventListener('blur', clearTouches);
-  window.addEventListener('resize', () => { clearTouches(); if (innerWidth <= innerHeight) connection.send({ type: 'visibility', visible: false }); else connection.send({ type: 'visibility', visible: !document.hidden }); });
+  // Browser toolbar/viewport resizing is not a finger release. Only actual
+  // orientation changes interrupt the gesture and pause the match.
+  matchMedia('(orientation: landscape)').addEventListener('change', updateAvailability);
+  $('#input-reset').addEventListener('pointerdown', clearTouches);
+  $('#input-reset').onclick = clearTouches;
   let swapped = read('jiku-swapped') === 'true';
   $('.phone-controls').classList.toggle('swapped', swapped);
   $('#swap').onclick = () => { clearTouches(); swapped = !swapped; write('jiku-swapped', String(swapped)); $('.phone-controls').classList.toggle('swapped', swapped); };
@@ -88,7 +61,7 @@ export function mountController() {
       player = msg.player; token = msg.token; write(storageKey, token);
       document.body.classList.toggle('player-orange', player === 1);
       $('#phone-player').textContent = `P${player + 1}`; $('#phone-color').textContent = player === 0 ? 'BLUE' : 'ORANGE';
-      if (innerWidth <= innerHeight) connection.send({ type: 'visibility', visible: false });
+      if (!landscape()) connection.send({ type: 'visibility', visible: false });
     }
     if (msg.type === 'error') {
       fatalText = msg.message; clearTouches(); $('#phone-overlay').hidden = false;

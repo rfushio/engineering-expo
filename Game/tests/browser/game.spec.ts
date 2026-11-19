@@ -1,3 +1,4 @@
+import { selectMode } from './host-menu';
 import { test, expect, type Browser, type Page } from '@playwright/test';
 import type { Snapshot } from '../../src/shared/protocol';
 async function reset(host: Page) {
@@ -21,7 +22,7 @@ test('two phones: readiness, touch input, release, disconnect/rejoin and reset',
   page.on('websocket', socket => socket.on('framereceived', event => {
     if (typeof event.payload === 'string') { const message = JSON.parse(event.payload); if (message.type === 'state') latestState = message.state; }
   }));
-  await reset(page);
+  await reset(page); await selectMode(page, 'battle');
   const info = await (await request.get('/api/host-info')).json();
   const a = await phone(browser, info.room), b = await phone(browser, info.room);
   a.page.on('pageerror', error => errors.push(error.message)); b.page.on('pageerror', error => errors.push(error.message));
@@ -46,12 +47,27 @@ test('two phones: readiness, touch input, release, disconnect/rejoin and reset',
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: fx - 20, y, id: 1 }, { x: fx, y: fy, id: 2 }] });
     expect(await a.page.locator('#stick').evaluate(el => el.style.left)).toEqual(origin);
     await expect(a.page.locator('#field-button')).toHaveClass(/pressed/);
+    // Real browser contacts: releasing either hand must leave the other working.
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [{ x: fx, y: fy, id: 2 }] });
+    await expect(a.page.locator('#field-button')).not.toHaveClass(/pressed/);
+    await expect(a.page.locator('#stick')).toBeVisible();
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: fx - 20, y, id: 1 }, { x: fx, y: fy, id: 2 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [{ x: fx - 20, y, id: 1 }] });
+    await expect(a.page.locator('#stick')).toBeHidden();
+    await expect(a.page.locator('#field-button')).toHaveClass(/pressed/);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await expect(a.page.locator('#stick')).toBeHidden(); await expect(a.page.locator('#field-button')).not.toHaveClass(/pressed/);
     await expect(a.page.locator('#phone-energy-text')).toHaveText('100%');
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }, { x: fx, y: fy, id: 2 }] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
     await expect(a.page.locator('#stick')).toBeHidden();
+    await expect(a.page.locator('#field-button')).not.toHaveClass(/pressed/);
+    // A pinch across both play zones and repeated tapping must not zoom the page.
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 3 }, { x: fx, y: fy, id: 4 }] });
+    for (let n = 1; n <= 5; n++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x - n * 12, y, id: 3 }, { x: fx + n * 10, y: fy, id: 4 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await a.page.locator('#field-button').tap(); await a.page.locator('#field-button').tap();
+    expect(await a.page.evaluate(() => visualViewport?.scale)).toBe(1);
     await expect(a.page.locator('#field-button')).not.toHaveClass(/pressed/);
   } else {
     await a.page.locator('#field-button').tap();
@@ -68,7 +84,7 @@ test('two phones: readiness, touch input, release, disconnect/rejoin and reset',
   expect(errors).toEqual([]); await a.context.close(); await b.context.close();
 });
 test('practice: one phone, tuning, reset, swap and rotation guidance', async ({ browser, page, request }) => {
-  await reset(page); await page.locator('[data-mode="practice"]').click();
+  await reset(page); await selectMode(page, 'practice');
   await page.locator('[data-map="islands"]').click();
   const info = await (await request.get('/api/host-info')).json(); const a = await phone(browser, info.room);
   await a.page.locator('#ready').tap(); await expect(a.page.locator('#phone-overlay')).toBeHidden();
@@ -83,5 +99,5 @@ test('practice: one phone, tuning, reset, swap and rotation guidance', async ({ 
   await a.page.setViewportSize({ width: 844, height: 390 }); await expect(a.page.locator('.rotate-overlay')).toBeHidden();
   await page.locator('#lobby').click();
   await page.locator('#settings-open').click(); await page.locator('#defaults').click(); await page.locator('#settings-save').click();
-  await page.locator('[data-mode="battle"]').click(); await a.context.close();
+  await selectMode(page, 'battle'); await a.context.close();
 });

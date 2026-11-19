@@ -1,6 +1,8 @@
 import QRCode from 'qrcode';
 import { Connection } from './connection';
 import { MagnetSound } from './magnet-sound';
+import { SpinOverlay } from './spin-overlay';
+import { spinLayout } from './spin-layout';
 import { drawControlPoints, pointStatus } from './control-view';
 import type { ReliefRenderer } from './relief';
 import { CONTROL_POINTS, DEFAULT_SETTINGS, HEIGHT, MAPS, SETTING_META, WIDTH, type MapId, type Mode, type Settings, type Snapshot } from '../shared/protocol';
@@ -10,7 +12,7 @@ export async function mountHost() {
   document.body.className = 'host';
   $('#app').innerHTML = `
     <main class="shell">
-      <header class="topbar"><a class="brand" href="/host"><span class="brand-mark">磁</span><span>磁区バトル<small>DOMAIN BATTLE</small></span></a><span class="tagline">切って、つないで、最後まで残せ。</span><div class="sound-controls"><button id="sound-toggle" class="quiet" aria-pressed="false" title="磁化の反転に合わせて効果音を鳴らします">音をON</button><label>音量 <input id="sound-volume" type="range" min="0" max="100" value="35" aria-label="効果音の音量"></label><button id="sound-preview" class="quiet" title="効果音を試聴">試聴</button></div><button id="settings-open" class="quiet">調整と設定 <span>↗</span></button></header>
+      <header class="topbar"><a class="brand" href="/host"><span class="brand-mark">磁</span><span>磁区バトル<small>DOMAIN BATTLE</small></span></a><span class="tagline">切って、つないで、最後まで残せ。</span><div class="sound-controls"><button id="sound-toggle" class="quiet" aria-pressed="false" title="磁化の反転に合わせて効果音を鳴らします">音をON</button><label>音量 <input id="sound-volume" type="range" min="0" max="100" value="35" aria-label="効果音の音量"></label><button id="sound-preview" class="quiet" title="効果音を試聴">試聴</button></div><button id="settings-open" class="quiet">調整と設定 <span>↗</span></button><button id="menu-toggle" class="quiet menu-toggle" aria-label="参加・ゲーム設定メニュー" aria-controls="host-menu" aria-expanded="false"><span class="menu-icon" aria-hidden="true"><i></i><i></i><i></i></span><span>参加・設定</span></button></header>
       <section class="game-layout">
         <div class="arena-column">
           <div class="scoreboard">
@@ -25,7 +27,7 @@ export async function mountHost() {
           <div class="arena-toolbar"><span id="match-note"><span class="status-dot"></span> 同じWi-Fiから参加</span><div><button id="pause" class="quiet" disabled>一時停止</button><button id="practice-reset" class="quiet" hidden>盤面リセット</button><button id="lobby" class="quiet" disabled>待機画面に戻る</button></div></div>
           <div class="howto"><div><span>01</span><div><b id="how-title-0">切る</b><p id="how-text-0">細い橋に磁場をかけよう。</p></div></div><div><span>02</span><div><b id="how-title-1">つなぐ</b><p id="how-text-1">消えそうな島を救おう。</p></div></div><div><span>03</span><div><b id="how-title-2">残す</b><p id="how-text-2">最後の5秒は、磁区を見守ろう。</p></div></div></div>
         </div>
-        <aside class="sidebar">
+        <aside id="host-menu" class="sidebar" aria-label="参加・ゲーム設定" hidden><div class="menu-heading"><strong>参加・ゲーム設定</strong><button id="menu-close" class="icon-button" aria-label="メニューを閉じる">×</button></div>
           <section class="join-card"><div class="section-heading"><span class="eyebrow">JOIN THE FIELD</span><span id="connection-count" class="count-badge">0 / 2</span></div><h2>スマホが、磁石になる。</h2><p>同じWi-Fiにつないで<br>QRコードを読み取ってください。</p><div class="qr-wrap"><canvas id="qr" aria-label="スマホ参加用QRコード"></canvas></div><label class="network-select">接続先 <select id="network" aria-label="参加用ネットワーク"></select></label><a id="join-url" target="_blank" rel="noopener">参加ページを開く ↗</a><p class="join-note">iPhoneを横持ちにして操作します。<br>つながらない場合はWi-FiのIPを選択。</p></section>
           <section class="setup-card"><span class="eyebrow">PLAY SETUP</span><div class="mode-switch" role="group" aria-label="ゲームモード"><button data-mode="battle" class="selected">二人対戦</button><button data-mode="practice">練習</button><button data-mode="control">拠点争奪</button></div><div class="map-heading"><h2 id="map-heading">盤面を選ぶ</h2><span id="map-count">3 FIELDS</span></div><div class="map-list">${MAPS.map((m, i) => `<button class="map-option ${i === 0 ? 'selected' : ''}" data-map="${m.id}"><span class="map-number">0${i + 1}</span><span><strong>${m.name}</strong><small>${m.description}</small></span><span class="map-radio"></span></button>`).join('')}</div><p id="setup-note" class="setup-note">二人とも準備完了で、試合が始まります。</p></section>
         </aside>
@@ -33,14 +35,95 @@ export async function mountHost() {
       <footer><span>磁区バトル <b>PROTOTYPE 01</b></span><span id="footer-rule">磁場を離すと回復 · 総面積で勝負</span><span id="diagnostics">接続しています…</span></footer>
     </main>
     <dialog id="settings-dialog"><form id="settings-form"><div class="dialog-heading"><div><span class="eyebrow">FIELD SETTINGS</span><h2>遊びの手触りを調整</h2></div><button type="button" id="settings-close" class="icon-button" aria-label="閉じる">×</button></div><p id="settings-help">対戦前、または練習を一時停止して変更できます。</p><div class="settings-grid">${Object.entries(SETTING_META).map(([key, m]) => `<label>${m.label}<span><input type="number" name="${key}" min="${m.min}" max="${m.max}" step="${m.step}" required><small>${m.unit}</small></span></label>`).join('')}</div><div class="dialog-actions"><button type="button" id="defaults" class="quiet">初期値に戻す</button><button type="submit" id="settings-save" class="primary">設定を適用</button></div><div class="connection-tools"><b>プレイヤーの交代</b><p>待機画面で接続枠をリセットしてから、次の二人が参加してください。</p><button type="button" id="release" class="quiet">接続枠をリセット</button></div><p class="model-note">Allen–Cahn型の連続場 / 192 × 108<br>数値は試作用の無次元設定です。実際の磁性体を定量的に再現するものではありません。</p></form></dialog><div id="toast" role="status" hidden></div>`;
+  // Keep the board in the viewport; occasional setup and help live in the drawer.
+  const menu = $('#host-menu'), menuToggle = $('#menu-toggle');
+  const help = document.createElement('details'); help.className = 'menu-help';
+  help.innerHTML = '<summary>ルール・表示の説明</summary>';
+  help.append($('.howto'), $('#relief-legend'), $('#match-note'));
+  menu.append(help, $('.shell > footer'));
+  const stage = document.createElement('div'); stage.className = 'arena-stage';
+  const arena = $('.arena-wrap'); arena.before(stage); stage.append(arena);
+  $('.arena-toolbar').prepend($('.view-toolbar'));
+  const spinToggle = document.createElement('button');
+  spinToggle.id = 'spin-toggle'; spinToggle.className = 'quiet';
+  spinToggle.textContent = 'スピン：ON'; spinToggle.setAttribute('aria-pressed', 'true');
+  spinToggle.title = '青は上向き、オレンジは下向き。矢印の長さは磁化の強さ。';
+  $('.view-switch').after(spinToggle);
+  const spinView = document.createElement('button');
+  spinView.id = 'view-spins'; spinView.textContent = '立体スピン';
+  spinView.setAttribute('aria-pressed', 'false');
+  $('.view-switch').append(spinView);
+  const spinCountControl = document.createElement('label');
+  spinCountControl.id = 'spin-count-control'; spinCountControl.hidden = true;
+  spinCountControl.innerHTML = '本数 <input id="spin-count" type="range" min="8" max="48" step="4" value="16" aria-label="立体スピンの表示数"><output id="spin-count-value">144本</output>';
+  $('#relief-controls').prepend(spinCountControl);
+  const spinCount = $<HTMLInputElement>('#spin-count');
+  try {
+    const saved = localStorage.getItem('jiku-spin-columns');
+    if (saved !== null) spinCount.value = String(spinLayout(Number(saved)).columns);
+  } catch {}
+  function showSpinCount() {
+    const layout = spinLayout(Number(spinCount.value));
+    $('#spin-count-value').textContent = `${layout.count}本`;
+    spinCount.setAttribute('aria-valuetext', `${layout.count}本（${layout.columns}列 × ${layout.rows}行）`);
+  }
+  showSpinCount();
+  const fieldColorControl = document.createElement('label');
+  fieldColorControl.innerHTML = '磁場の色 <input id="field-visibility" type="range" min="0" max="100" value="65" aria-label="磁場の色の強さ"><output id="field-visibility-value">65%</output>';
+  fieldColorControl.title = '照射範囲の色と光の強さ。磁場の物理的な強さは変わりません。';
+  $('#relief-controls').append(fieldColorControl);
+  const fieldVisibility = $<HTMLInputElement>('#field-visibility');
+  try {
+    const saved = localStorage.getItem('jiku-field-visibility');
+    if (saved !== null && Number.isFinite(Number(saved))) fieldVisibility.value = String(Math.max(0, Math.min(100, Number(saved))));
+  } catch {}
+  $('#field-visibility-value').textContent = `${fieldVisibility.value}%`;
+  const spinHelp = document.createElement('p'); spinHelp.className = 'spin-help';
+  spinHelp.textContent = '平面版の矢印は青が↑、オレンジが↓。「立体スピン」は本数スライダーで40〜1296本に調整できます。密度に合わせて矢印を小さくしますが、反転中の長さは一定です。磁化が変わると回転し、正負が反転すると青とオレンジが切り替わります。回転は磁化を見せる演出です。';
+  help.append(spinHelp);
+  new ResizeObserver(() => requestAnimationFrame(() => {
+    const width = Math.max(0, Math.min(stage.clientWidth, stage.clientHeight * 16 / 9));
+    arena.style.width = `${width}px`;
+  })).observe(stage);
+  function setMenu(open: boolean, returnFocus = false) {
+    menu.hidden = !open; menuToggle.setAttribute('aria-expanded', String(open));
+    if (open) $('#menu-close').focus(); else if (returnFocus) menuToggle.focus();
+  }
+  menuToggle.onclick = () => setMenu(menu.hidden);
+  $('#menu-close').onclick = () => setMenu(false, true);
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !menu.hidden && !$<HTMLDialogElement>('#settings-dialog').open) setMenu(false, true);
+  });
+  document.addEventListener('pointerdown', event => {
+    if (!menu.hidden && event.target instanceof Node && !menu.contains(event.target) && !menuToggle.contains(event.target) && !$<HTMLDialogElement>('#settings-dialog').open) setMenu(false);
+  });
   let info: { token: string; room: string; urls: string[]; localController: string };
   try { const res = await fetch('/api/host-info'); if (!res.ok) throw new Error(await res.text()); info = await res.json(); }
   catch (e) { $('#overlay-title').textContent = 'PCの画面を開けません'; $('#overlay-body').textContent = String(e); return; }
   const connection = new Connection(() => ({ type: 'hello', role: 'host', token: info.token }));
   const sound = new MagnetSound();
+  const spins = new SpinOverlay();
+  let showSpins = true;
+  spinToggle.onclick = () => {
+    showSpins = !showSpins;
+    spinToggle.textContent = showSpins ? 'スピン：ON' : 'スピン：OFF';
+    spinToggle.setAttribute('aria-pressed', String(showSpins));
+    $('#field-caption').textContent = showSpins ? '↑ BLUE · ↓ ORANGE' : 'LIVE FIELD';
+  };
+  $('#field-caption').textContent = '↑ BLUE · ↓ ORANGE';
   let state: Snapshot | undefined, fps = 0, frames = 0, fpsStart = performance.now();
   let latest: Uint8Array | undefined, painted: Uint8Array | undefined;
-  let view3d = false, contextLost = false, relief: ReliefRenderer | undefined;
+  let pendingSetup: { mode: Mode; map: MapId } | undefined;
+  let view3d = false, spin3d = false, contextLost = false, relief: ReliefRenderer | undefined;
+  spinCount.oninput = () => {
+    showSpinCount(); relief?.setSpinColumns(Number(spinCount.value));
+    try { localStorage.setItem('jiku-spin-columns', spinCount.value); } catch {}
+  };
+  fieldVisibility.oninput = () => {
+    $('#field-visibility-value').textContent = `${fieldVisibility.value}%`;
+    relief?.setFieldVisibility(Number(fieldVisibility.value) / 100);
+    try { localStorage.setItem('jiku-field-visibility', fieldVisibility.value); } catch {}
+  };
   const reliefCanvas = $<HTMLCanvasElement>('#arena-relief');
   const canvas = $<HTMLCanvasElement>('#arena'), ctx = canvas.getContext('2d')!;
   const fieldCanvas = document.createElement('canvas'); fieldCanvas.width = WIDTH; fieldCanvas.height = HEIGHT;
@@ -67,7 +150,8 @@ export async function mountHost() {
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(fieldCanvas, 0, 0, width, height);
     ctx.fillStyle = 'rgba(5,18,30,.055)';
     const unit = width / WIDTH;
-    for (let x = 0; x < WIDTH; x += 8) for (let y = 0; y < HEIGHT; y += 8) ctx.fillRect(x * unit, y * unit, ratio, ratio);
+    if (showSpins && latest) spins.draw(ctx, latest, width, height, ratio);
+    else for (let x = 0; x < WIDTH; x += 8) for (let y = 0; y < HEIGHT; y += 8) ctx.fillRect(x * unit, y * unit, ratio, ratio);
     if (!state) return;
     if (state.control) drawControlPoints(ctx, state.control, unit, ratio);
     for (const p of state.players) {
@@ -111,37 +195,51 @@ export async function mountHost() {
     sound.setVolume(Number(volumeSlider.value) / 100);
     try { localStorage.setItem('jiku-sound-volume', volumeSlider.value); } catch {}
   };
-  async function setView(use3d: boolean) {
+  async function setView(use3d: boolean, spinOnly = false) {
+    spinView.disabled = true;
     $<HTMLButtonElement>('#view-relief').disabled = true;
     $<HTMLButtonElement>('#view-flat').disabled = true;
     try {
       if (use3d && !relief) {
         const module = await import('./relief');
         relief = new module.ReliefRenderer(reliefCanvas);
+        relief.setSpinColumns(Number(spinCount.value));
+        relief.setFieldVisibility(Number(fieldVisibility.value) / 100);
         relief.setHeight(Number($<HTMLInputElement>('#relief-height').value));
         relief.setAngle(Number($<HTMLInputElement>('#relief-angle').value));
       }
-      view3d = use3d;
+      view3d = use3d; spin3d = use3d && spinOnly;
+      relief?.setSpinOnly(spin3d);
     } catch (error) {
-      view3d = false;
+      view3d = false; spin3d = false;
       console.warn('3D view unavailable', error);
       toast('この環境では立体表示を使えません。平面版で続けられます。');
     } finally {
       canvas.hidden = view3d; reliefCanvas.hidden = !view3d;
       $('#relief-controls').hidden = $('#relief-legend').hidden = !view3d;
+      $<HTMLInputElement>('#relief-height').closest('label')!.hidden = spin3d;
+      spinCountControl.hidden = !spin3d;
+      $('#relief-legend .legend-blue')!.parentElement!.lastChild!.textContent = spin3d ? ' P1：青い上向きスピン' : ' P1：高い磁区 · S極が下';
+      $('#relief-legend .legend-orange')!.parentElement!.lastChild!.textContent = spin3d ? ' P2：オレンジの下向きスピン' : ' P2：低い磁区 · N極が下';
       $('.arena-wrap').classList.toggle('relief-view', view3d);
-      $('#view-flat').classList.toggle('selected', !view3d); $('#view-relief').classList.toggle('selected', view3d);
-      $('#view-flat').setAttribute('aria-pressed', String(!view3d)); $('#view-relief').setAttribute('aria-pressed', String(view3d));
-      $('#field-caption').textContent = view3d ? 'RELIEF FIELD · 3D' : 'LIVE FIELD';
+      $('#view-flat').classList.toggle('selected', !view3d); $('#view-relief').classList.toggle('selected', view3d && !spin3d);
+      spinView.classList.toggle('selected', spin3d); spinView.setAttribute('aria-pressed', String(spin3d));
+      $('#view-flat').setAttribute('aria-pressed', String(!view3d)); $('#view-relief').setAttribute('aria-pressed', String(view3d && !spin3d));
+      spinToggle.hidden = view3d;
+      reliefCanvas.setAttribute('aria-label', spin3d ? '立体スピン。青は上向き、オレンジは下向き。一定の長さで回転し、反転すると色が変わります' : '立体版。青い磁区は高く、オレンジは低い。P1はS極が下、P2はN極が下の棒磁石');
+      $('#field-caption').textContent = spin3d ? 'SPIN FIELD · ↑ BLUE / ↓ ORANGE' : view3d ? 'RELIEF FIELD · 3D' : showSpins ? '↑ BLUE · ↓ ORANGE' : 'LIVE FIELD';
+      $('#relief-scoring-note').textContent = (spin3d ? '回転は磁化の表示。' : '高さは磁化の表示。') + (state?.control ? '勝敗は拠点の累計得点。' : '勝敗は面積で判定。');
       const url = new URL(location.href);
-      if (view3d) url.searchParams.set('view', '3d'); else url.searchParams.delete('view');
+      if (view3d) url.searchParams.set('view', spin3d ? 'spins' : '3d'); else url.searchParams.delete('view');
       history.replaceState(null, '', url);
       $<HTMLButtonElement>('#view-relief').disabled = contextLost;
       $<HTMLButtonElement>('#view-flat').disabled = false;
+      spinView.disabled = contextLost;
     }
   }
   $('#view-flat').onclick = () => void setView(false);
   $('#view-relief').onclick = () => void setView(true);
+  spinView.onclick = () => void setView(true, true);
   $('#relief-height').oninput = () => {
     const value = Number($<HTMLInputElement>('#relief-height').value);
     $('#relief-height-value').textContent = String(value); relief?.setHeight(value);
@@ -166,9 +264,9 @@ export async function mountHost() {
     if (state) sound.update(frame, state);
   };
   connection.onStatus = connected => {
-    if (!connected) { sound.silence(); $('#overlay-title').textContent = 'PCサーバーに再接続中'; $('#overlay-body').textContent = '起動したターミナルとWi-Fi接続を確認してください。'; $('#board-overlay').hidden = false; }
+    if (!connected) { pendingSetup = undefined; sound.silence(); $('#overlay-title').textContent = 'PCサーバーに再接続中'; $('#overlay-body').textContent = '起動したターミナルとWi-Fi接続を確認してください。'; $('#board-overlay').hidden = false; }
   };
-  connection.onMessage = msg => { if (msg.type === 'error') toast(msg.message); };
+  connection.onMessage = msg => { if (msg.type === 'error') { pendingSetup = undefined; toast(msg.message); } };
   const phaseLabels = { lobby: '接続待ち', countdown: 'まもなく開始', playing: '磁場を操作', relaxing: '自然緩和', paused: '一時停止', finished: '試合終了' };
   connection.onState = s => {
     if (state && (s.phase !== state.phase || s.map !== state.map || s.elapsed < state.elapsed)) sound.silence();
@@ -176,7 +274,9 @@ export async function mountHost() {
       const changes = s.control.points.filter((p, i) => p.owner !== state!.control!.points[i]?.owner);
       if (changes.length) toast(changes.map(p => p.owner === null ? `拠点 ${p.id} が中立に` : `P${p.owner + 1} が拠点 ${p.id} を占領！`).join(' ／ '), 2400);
     }
+    if (s.phase === 'countdown' && state?.phase !== 'countdown') setMenu(false);
     state = s;
+    if (pendingSetup && ((s.mode === pendingSetup.mode && s.map === pendingSetup.map) || !['lobby', 'finished'].includes(s.phase))) pendingSetup = undefined;
     const control = s.control;
     document.body.classList.toggle('control-mode', !!control);
     $('#control-panel').hidden = !control;
@@ -209,15 +309,15 @@ export async function mountHost() {
     $('#map-label').textContent = control ? 'A・B・C 拠点争奪' : MAPS.find(m => m.id === s.map)!.name;
     $('#map-heading').textContent = control ? '拠点用の固定盤面' : '盤面を選ぶ';
     $('#map-count').textContent = control ? '3 BASES' : '3 FIELDS';
-    $('#relief-scoring-note').textContent = control ? '高さは磁化の表示。勝敗は拠点の累計得点。' : '高さは磁化の表示。勝敗は面積で判定。';
+    $('#relief-scoring-note').textContent = (spin3d ? '回転は磁化の表示。' : '高さは磁化の表示。') + (control ? '勝敗は拠点の累計得点。' : '勝敗は面積で判定。');
     $('#footer-rule').textContent = control ? '拠点を保持して得点 · 60%未満で中立に' : '磁場を離すと回復 · 総面積で勝負';
     const instructions = control ? [['占領', '円内の60%以上を、1秒維持。'], ['守る', '1拠点を保持するごとに毎秒1点。'], ['奪う', '橋や拠点を攻め、相手の得点を止めよう。']] : [['切る', '細い橋に磁場をかけよう。'], ['つなぐ', '消えそうな島を救おう。'], ['残す', '最後の5秒は、磁区を見守ろう。']];
     instructions.forEach(([title, text], i) => { $(`#how-title-${i}`).textContent = title; $(`#how-text-${i}`).textContent = text; });
     $('#field-label').textContent = `磁場半径 ${s.settings.fieldRadius}`;
     $('#board-instruction').textContent = s.phase === 'relaxing' ? '最後の5秒。つくった形が、どれだけ残るか。' : control ? '円の60%以上を1秒維持して占領' : '左手で動かす · 右手で磁場をかける';
     $('#setup-note').textContent = s.mode === 'practice' ? '1人で練習できます。スマホで準備完了を押してください。' : control ? '橋の先にA・C、中央にB。二人とも準備完了で開始します。' : '二人とも準備完了で、試合が始まります。';
-    document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(b => { b.disabled = !waiting || !!control; b.classList.toggle('selected', b.dataset.map === s.map); });
-    document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(b => { b.disabled = !waiting; b.classList.toggle('selected', b.dataset.mode === s.mode); });
+    document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(b => { b.disabled = !waiting || !!pendingSetup || !!control; b.classList.toggle('selected', b.dataset.map === s.map); });
+    document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(b => { b.disabled = !waiting || !!pendingSetup; b.classList.toggle('selected', b.dataset.mode === s.mode); });
     $<HTMLButtonElement>('#pause').disabled = !['playing', 'relaxing', 'countdown'].includes(s.phase);
     $<HTMLButtonElement>('#lobby').disabled = s.phase === 'lobby';
     $('#practice-reset').hidden = !(s.mode === 'practice' && s.phase === 'paused');
@@ -243,8 +343,16 @@ export async function mountHost() {
     $('#match-note').textContent = s.phase === 'paused' ? '● 再開はスマホの準備完了から' : s.mode === 'practice' ? '● 練習中はPCで停止・調整できます' : control ? '● 90秒後、拠点の累計得点が多い方の勝ち' : '● 終了時の面積が多い方の勝ち';
     $('#diagnostics').textContent = `${Math.round(fps)} fps · 通信往復 ${Math.round(connection.rtt)} ms · 計算 ${s.tickMs.toFixed(1)} ms`;
   };
-  document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(b => b.onclick = () => connection.send({ type: 'host', action: 'setup', mode: state?.mode ?? 'battle', map: b.dataset.map as MapId }));
-  document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(b => b.onclick = () => connection.send({ type: 'host', action: 'setup', mode: b.dataset.mode as Mode, map: state?.map ?? 'bridges' }));
+  function selectSetup(mode: Mode, map: MapId) {
+    if (!connection.connected || pendingSetup) return;
+    pendingSetup = { mode, map: mode === 'control' ? 'bridges' : map };
+    // Wait for the server to acknowledge a selection before another click can
+    // accidentally send a stale mode together with a newly chosen map.
+    document.querySelectorAll<HTMLButtonElement>('[data-map], [data-mode]').forEach(b => { b.disabled = true; });
+    connection.send({ type: 'host', action: 'setup', ...pendingSetup });
+  }
+  document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(b => b.onclick = () => selectSetup(state?.mode ?? 'battle', b.dataset.map as MapId));
+  document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(b => b.onclick = () => selectSetup(b.dataset.mode as Mode, state?.map ?? 'bridges'));
   $('#pause').onclick = () => connection.send({ type: 'host', action: 'pause' });
   $('#practice-reset').onclick = () => connection.send({ type: 'host', action: 'reset' });
   $('#lobby').onclick = $('#rematch').onclick = () => connection.send({ type: 'host', action: 'lobby' });
@@ -266,4 +374,5 @@ export async function mountHost() {
   window.addEventListener('pagehide', () => sound.silence());
   connection.open();
   if (new URLSearchParams(location.search).get('view') === '3d') await setView(true);
+  if (new URLSearchParams(location.search).get('view') === 'spins') await setView(true, true);
 }

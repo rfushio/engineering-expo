@@ -1,3 +1,4 @@
+import { selectMode } from './host-menu';
 import { test, expect } from '@playwright/test';
 import { WebSocket } from 'ws';
 import type { Snapshot } from '../../src/shared/protocol';
@@ -21,7 +22,7 @@ test('sound: opt in, actual field reversal, mute and preview', async ({ page, re
   await page.goto('/host');
   if (await page.locator('#lobby').isEnabled()) await page.locator('#lobby').click();
   await page.locator('#settings-open').click(); await page.locator('#release').click();
-  await page.locator('[data-mode="practice"]').click(); await page.locator('[data-map="bridges"]').click();
+  await selectMode(page, 'practice'); await page.locator('[data-map="bridges"]').click();
   expect(await page.evaluate(() => (window as any).__audioProbe.contexts.length)).toBe(0);
   await page.locator('#sound-toggle').click(); await expect(page.locator('#sound-toggle')).toHaveAttribute('aria-pressed', 'true');
   expect(await page.evaluate(() => (window as any).__audioProbe.contexts[0].state)).toBe('running');
@@ -55,6 +56,6 @@ test('sound: opt in, actual field reversal, mute and preview', async ({ page, re
     await expect.poll(() => page.evaluate(() => (window as any).__audioProbe.starts)).toBeGreaterThan(starts);
     await page.locator('#sound-volume').evaluate((input: HTMLInputElement) => { input.value = '0'; input.dispatchEvent(new Event('input')); });
     await page.locator('#sound-toggle').click();
-    await page.locator('[data-mode="battle"]').click();
+    await selectMode(page, 'battle');
   } finally { clearInterval(timer); ws.close(); }
 });

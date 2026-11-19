@@ -1,3 +1,4 @@
+import { selectMode } from './host-menu';
 import { test, expect, type Page } from '@playwright/test';
 import type { Snapshot } from '../../src/shared/protocol';
 
@@ -29,7 +30,7 @@ test('control mode: two phones capture, score, pause, render in 3D and complete 
   await expect(page.locator('#connection-count')).toHaveText(/\d \/ 2/);
   if (await page.locator('#lobby').isEnabled()) await page.locator('#lobby').click();
   await page.locator('#settings-open').click(); await page.locator('#release').click();
-  await page.locator('[data-mode="control"]').click();
+  await selectMode(page, 'control');
   await expect(page.locator('#control-panel')).toBeVisible(); await expect(page.locator('#time')).toHaveText('90秒');
   await expect(page.locator('[data-map="islands"]')).toBeDisabled();
   await expect(page.locator('#score-unit-0')).toHaveText('点');
@@ -78,7 +79,7 @@ test('control mode: two phones capture, score, pause, render in 3D and complete 
       await page.locator('#rematch').click();
     } else await page.locator('#lobby').click();
     await expect(page.locator('#area-0')).toHaveText('0.0'); await expect(page.locator('#control-status-B')).toHaveText('中立');
-    await page.locator('[data-mode="battle"]').click(); await expect(page.locator('#control-panel')).toBeHidden();
+    await selectMode(page, 'battle'); await expect(page.locator('#control-panel')).toBeHidden();
     await expect(page.locator('#score-unit-0')).toHaveText('%'); await expect(page.locator('#time')).toHaveText('80秒');
     expect(errors).toEqual([]);
   } finally { await Promise.all(contexts.map(context => context.close())); }

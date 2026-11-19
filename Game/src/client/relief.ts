@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONTROL_POINTS, HEIGHT, WIDTH, type Snapshot } from '../shared/protocol';
 import { controlColor } from './control-view';
+import { SpinLattice } from './spin-lattice';
 
 const BLUE = new THREE.Color('#3199cc');
 const ORANGE = new THREE.Color('#e8a06a');
@@ -37,6 +38,8 @@ interface Magnet {
   tether: THREE.Line;
   beams: THREE.LineSegments;
   glow: THREE.PointLight;
+  patch: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
+  volume: THREE.Mesh<THREE.ConeGeometry, THREE.MeshBasicMaterial>;
 }
 interface ControlMarker {
   group: THREE.Group;
@@ -63,6 +66,11 @@ export class ReliefRenderer {
   private height = 0;
   private lastTime = 0;
   private perimeter: number[] = [];
+  private terrainGroup = new THREE.Group();
+  private spinLattice = new SpinLattice();
+  private spinOnly = false;
+  private fieldVisibility = .65;
+  private plate: THREE.Mesh;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -84,7 +92,10 @@ export class ReliefRenderer {
     fill.position.set(90, 80, -90); this.scene.add(fill);
 
     const plate = new THREE.Mesh(new THREE.BoxGeometry(WIDTH + 7, 4, HEIGHT + 7), new THREE.MeshStandardMaterial({ color: '#33495a', roughness: .65, metalness: .25 }));
+    this.plate = plate;
     plate.position.y = BASE_Y - 2.1; plate.receiveShadow = true; this.scene.add(plate);
+    this.scene.add(this.terrainGroup, this.spinLattice.group);
+    this.spinLattice.group.visible = false;
     const grid = new THREE.GridHelper(250, 25, '#35536a', '#203e52');
     grid.position.y = BASE_Y - 4.3; this.scene.add(grid);
 
@@ -106,7 +117,7 @@ export class ReliefRenderer {
     this.surface.setAttribute('color', new THREE.BufferAttribute(colors, 3).setUsage(THREE.DynamicDrawUsage));
     this.surface.setIndex(new THREE.BufferAttribute(indices, 1));
     const terrain = new THREE.Mesh(this.surface, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .7, metalness: .05, side: THREE.DoubleSide }));
-    terrain.receiveShadow = true; terrain.frustumCulled = false; this.scene.add(terrain);
+    terrain.receiveShadow = true; terrain.frustumCulled = false; this.terrainGroup.add(terrain);
 
     for (let x = 0; x < WIDTH; x++) this.perimeter.push(x);
     for (let y = 1; y < HEIGHT; y++) this.perimeter.push(y * WIDTH + WIDTH - 1);
@@ -116,7 +127,7 @@ export class ReliefRenderer {
     this.skirt.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.perimeter.length * 6 * 3), 3).setUsage(THREE.DynamicDrawUsage));
     this.skirt.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.perimeter.length * 6 * 3), 3).setUsage(THREE.DynamicDrawUsage));
     const walls = new THREE.Mesh(this.skirt, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, side: THREE.DoubleSide }));
-    walls.frustumCulled = false; this.scene.add(walls);
+    walls.frustumCulled = false; this.terrainGroup.add(walls);
     this.magnets = [this.makeMagnet(0), this.makeMagnet(1)];
     this.controlMarkers = CONTROL_POINTS.map(point => this.makeControlMarker(point.id));
     this.setAngle(this.angle);
@@ -195,11 +206,29 @@ export class ReliefRenderer {
     const beams = new THREE.LineSegments(beamsGeometry, new THREE.LineBasicMaterial({ color: accent, transparent: true, opacity: .28, depthTest: true }));
     beams.frustumCulled = false; this.scene.add(beams);
     const glow = new THREE.PointLight(accent, 0, 24, 2); this.scene.add(glow);
-    return { group, body, marker, ring, tether, beams, glow };
+    const fieldColor = id === 0 ? '#168fff' : '#ff792c';
+    const patch = new THREE.Mesh(new THREE.RingGeometry(0, 1, SEGMENTS, 8), new THREE.MeshBasicMaterial({ color: fieldColor, transparent: true, opacity: .4, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+    patch.frustumCulled = false; patch.visible = false; this.scene.add(patch);
+    const volume = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 40, 1, true), new THREE.MeshBasicMaterial({ color: fieldColor, transparent: true, opacity: .1, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false }));
+    volume.visible = false; this.scene.add(volume);
+    return { group, body, marker, ring, tether, beams, glow, patch, volume };
   }
 
   setHeight(value: number) {
     this.heightScale = THREE.MathUtils.clamp(value, 3, 14); this.lastFrame = undefined;
+  }
+  setSpinOnly(enabled: boolean) {
+    this.spinOnly = enabled;
+    this.terrainGroup.visible = !enabled;
+    this.spinLattice.group.visible = enabled;
+    this.plate.position.y = (enabled ? 0 : BASE_Y) - 2.1;
+    this.lastFrame = undefined;
+  }
+  setSpinColumns(columns: number) {
+    this.spinLattice.setColumns(columns);
+  }
+  setFieldVisibility(value: number) {
+    this.fieldVisibility = THREE.MathUtils.clamp(value, 0, 1);
   }
   setAngle(value: number) {
     this.angle = THREE.MathUtils.clamp(value, 35, 75);
@@ -208,6 +237,7 @@ export class ReliefRenderer {
     this.camera.lookAt(0, 0, 0);
   }
   private sample(x: number, y: number) {
+    if (this.spinOnly) return 0;
     if (!this.frame) return 0;
     x = THREE.MathUtils.clamp(x, 0, WIDTH - 1); y = THREE.MathUtils.clamp(y, 0, HEIGHT - 1);
     const x0 = Math.floor(x), y0 = Math.floor(y), x1 = Math.min(WIDTH - 1, x0 + 1), y1 = Math.min(HEIGHT - 1, y0 + 1);
@@ -255,13 +285,15 @@ export class ReliefRenderer {
       this.camera.top = viewHeight / 2; this.camera.bottom = -viewHeight / 2;
       this.camera.updateProjectionMatrix();
     }
-    if (frame && frame !== this.lastFrame) this.updateTerrain(frame);
+    this.frame = frame;
+    if (frame && frame !== this.lastFrame && !this.spinOnly) this.updateTerrain(frame);
     this.drawControl(state);
     const dt = Math.min(.05, (now - this.lastTime) / 1000); this.lastTime = now;
+    if (frame && this.spinOnly) this.spinLattice.update(frame, dt);
     if (state) for (const p of state.players) {
       const magnet = this.magnets[p.id];
       magnet.group.position.set(p.x - (WIDTH - 1) / 2, 0, p.y - (HEIGHT - 1) / 2);
-      const targetY = this.heightScale + (p.active ? 5 : 10);
+      const targetY = (this.spinOnly ? 9 : this.heightScale) + (p.active ? 5 : 10);
       magnet.body.position.y = this.lastTime ? THREE.MathUtils.lerp(magnet.body.position.y || targetY, targetY, 1 - Math.exp(-dt * 18)) : targetY;
       const bx = magnet.group.position.x, bz = magnet.group.position.z, tip = magnet.body.position.y - 3.4;
       const ring = magnet.ring.geometry.getAttribute('position') as THREE.BufferAttribute;
@@ -275,7 +307,24 @@ export class ReliefRenderer {
       const tether = magnet.tether.geometry.getAttribute('position') as THREE.BufferAttribute;
       tether.setXYZ(0, bx, tip, bz); tether.setXYZ(1, bx, this.sample(p.x, p.y) + .3, bz); tether.needsUpdate = true;
       magnet.tether.computeLineDistances();
-      magnet.beams.visible = p.active;
+      magnet.beams.visible = p.active && this.fieldVisibility > 0;
+      (magnet.beams.material as THREE.LineBasicMaterial).opacity = .55 * this.fieldVisibility;
+      magnet.patch.visible = magnet.volume.visible = p.active && this.fieldVisibility > 0;
+      if (magnet.patch.visible) {
+        const positions = magnet.patch.geometry.getAttribute('position') as THREE.BufferAttribute;
+        const uv = magnet.patch.geometry.getAttribute('uv') as THREE.BufferAttribute;
+        for (let k = 0; k < positions.count; k++) {
+          const x = THREE.MathUtils.clamp(p.x + (uv.getX(k) * 2 - 1) * state.settings.fieldRadius, 0, WIDTH - 1);
+          const y = THREE.MathUtils.clamp(p.y + (uv.getY(k) * 2 - 1) * state.settings.fieldRadius, 0, HEIGHT - 1);
+          positions.setXYZ(k, x - (WIDTH - 1) / 2, this.sample(x, y) + .18, y - (HEIGHT - 1) / 2);
+        }
+        positions.needsUpdate = true;
+        magnet.patch.material.opacity = .65 * this.fieldVisibility;
+        magnet.volume.material.opacity = .18 * this.fieldVisibility;
+        const base = this.sample(p.x, p.y) + .2, height = Math.max(.1, tip - base);
+        magnet.volume.position.set(bx, base + height / 2, bz);
+        magnet.volume.scale.set(state.settings.fieldRadius, height, state.settings.fieldRadius);
+      }
       const beams = magnet.beams.geometry.getAttribute('position') as THREE.BufferAttribute;
       for (let k = 0; k < 8; k++) {
         const theta = k / 8 * Math.PI * 2 + now * .0003;
@@ -286,7 +335,7 @@ export class ReliefRenderer {
       }
       beams.needsUpdate = true;
       magnet.glow.position.set(bx, this.sample(p.x, p.y) + 7, bz);
-      magnet.glow.intensity = p.active ? 100 : 0;
+      magnet.glow.intensity = p.active ? 500 * this.fieldVisibility : 0;
     }
     this.renderer.render(this.scene, this.camera);
   }

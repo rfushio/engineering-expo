@@ -1,3 +1,4 @@
+import { selectMode } from './host-menu';
 import { test, expect } from '@playwright/test';
 import type { Snapshot } from '../../src/shared/protocol';
 
@@ -17,7 +18,7 @@ test('relief edition: terrain, magnets, view controls and live 2D/3D switching',
   await expect(page.locator('#arena')).toBeHidden();
   if (await page.locator('#lobby').isEnabled()) await page.locator('#lobby').click();
   await page.locator('#settings-open').click(); await page.locator('#release').click();
-  await page.locator('[data-mode="practice"]').click();
+  await selectMode(page, 'practice');
   await page.locator('[data-map="fronts"]').click();
   await expect(page.locator('#map-label')).toHaveText('複数の前線');
   await page.screenshot({ path: testInfo.outputPath('relief-lobby.png'), fullPage: true });
@@ -47,7 +48,7 @@ test('relief edition: terrain, magnets, view controls and live 2D/3D switching',
   await expect(page.locator('#arena-relief')).toBeVisible();
   await expect(page).toHaveURL(/view=3d/);
   expect(state!.phase).toBe('playing'); expect(state!.elapsed).toBeGreaterThanOrEqual(elapsed); expect(state!.settings).toEqual(settings);
-  await page.locator('#lobby').click(); await page.locator('[data-mode="battle"]').click();
+  await page.locator('#lobby').click(); await selectMode(page, 'battle');
   await phoneContext.close();
   expect(errors).toEqual([]);
 });

@@ -1,0 +1,98 @@
+import { test, expect } from '@playwright/test';
+import { selectMode } from './host-menu';
+import type { Snapshot } from '../../src/shared/protocol';
+
+test('spin overlay changes the picture, preserves the game and fits compact screens', async ({ page, browser, request }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  let state: Snapshot | undefined;
+  page.on('websocket', socket => socket.on('framereceived', event => {
+    if (typeof event.payload === 'string') {
+      const msg = JSON.parse(event.payload); if (msg.type === 'state') state = msg.state;
+    }
+  }));
+  await page.goto('/host');
+  await expect.poll(() => state?.phase).toBeTruthy();
+  if (await page.locator('#lobby').isEnabled()) await page.locator('#lobby').click();
+  await page.locator('#settings-open').click(); await page.locator('#release').click();
+  await selectMode(page, 'practice');
+  await expect(page.locator('[data-mode="practice"]')).toHaveClass(/selected/);
+  await page.locator('#menu-close').click();
+  await expect(page.locator('#spin-toggle')).toHaveAttribute('aria-pressed', 'true');
+  const settings = { ...state!.settings }, area = [...state!.area];
+  const picture = () => page.locator('#arena').evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+  const spins = await picture();
+  await page.locator('#spin-toggle').click();
+  await expect(page.locator('#spin-toggle')).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(picture).not.toBe(spins);
+  expect(state!.settings).toEqual(settings); expect(state!.area).toEqual(area);
+  await page.locator('#spin-toggle').click();
+  await expect.poll(picture).toBe(spins);
+
+  const info = await (await request.get('/api/host-info')).json();
+  const phoneContext = await browser.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
+  const phone = await phoneContext.newPage();
+  await phone.goto(`/controller?room=${info.room}`);
+  await phone.locator('#ready').tap();
+  await expect(page.locator('#phase-label')).toHaveText('磁場を操作');
+  await page.screenshot({ path: testInfo.outputPath('spins-playing.png') });
+  await page.locator('#view-relief').click();
+  await expect(page.locator('#arena-relief')).toBeVisible();
+  await expect(page.locator('#spin-toggle')).toBeHidden();
+  await page.locator('#view-spins').click();
+  await expect(page).toHaveURL(/view=spins/);
+  await expect(page.locator('#view-spins')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#relief-height')).toBeHidden();
+  await expect(page.locator('#relief-angle')).toBeVisible();
+  const adjust = async (selector: string, value: string) => {
+    await page.locator(selector).evaluate((input: HTMLInputElement, v) => {
+      input.value = v; input.dispatchEvent(new Event('input'));
+    }, value);
+  };
+  await adjust('#spin-count', '8');
+  await expect(page.locator('#spin-count-value')).toHaveText('40本');
+  await adjust('#spin-count', '48');
+  await expect(page.locator('#spin-count-value')).toHaveText('1296本');
+  await page.screenshot({ path: testInfo.outputPath('spins-3d-dense.png') });
+  await adjust('#spin-count', '16');
+  await expect(page.locator('#spin-count-value')).toHaveText('144本');
+  await adjust('#field-visibility', '100');
+  const field = await phone.locator('#field-button').boundingBox();
+  await phone.mouse.move(field!.x + field!.width / 2, field!.y + field!.height / 2);
+  await phone.mouse.down();
+  await expect.poll(() => state?.players[0].active).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('spins-3d-field-100.png') });
+  await adjust('#field-visibility', '0');
+  await expect(page.locator('#field-visibility-value')).toHaveText('0%');
+  await page.screenshot({ path: testInfo.outputPath('spins-3d-field-0.png') });
+  await phone.mouse.up();
+  await expect.poll(() => state?.players[0].active).toBe(false);
+  await adjust('#field-visibility', '80');
+  await adjust('#spin-count', '24');
+  await page.screenshot({ path: testInfo.outputPath('spins-3d-playing.png') });
+  await page.locator('#view-relief').click();
+  await expect(page.locator('#relief-height')).toBeVisible();
+  await page.locator('#view-flat').click();
+  await expect(page.locator('#spin-toggle')).toHaveAttribute('aria-pressed', 'true');
+  expect(state!.phase).toBe('playing'); expect(state!.settings).toEqual(settings);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('#spin-toggle')).toBeInViewport();
+  await expect(page.locator('#arena')).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: testInfo.outputPath('spins-compact.png') });
+  await page.locator('#view-spins').click();
+  await expect(page.locator('#view-spins')).toBeInViewport();
+  await expect(page.locator('#relief-angle')).toBeInViewport();
+  await expect(page.locator('#spin-count-value')).toHaveText('336本');
+  await expect(page.locator('#field-visibility')).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: testInfo.outputPath('spins-3d-compact.png') });
+  await page.locator('#lobby').click();
+  await phoneContext.close();
+  await page.reload();
+  await expect(page.locator('#view-spins')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#spin-count-value')).toHaveText('336本');
+  await expect(page.locator('#field-visibility-value')).toHaveText('80%');
+  expect(errors).toEqual([]);
+});
