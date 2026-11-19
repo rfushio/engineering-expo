@@ -1,0 +1,198 @@
+[
+  {
+    "field_mT": 0.0,
+    "background": {
+      "energy_J": -0.013529083173217346,
+      "max_torque_Nm": 3.1731468860701794e-17,
+      "min_curvature_J_rad2": 5.904624885908584e-06
+    },
+    "control_max_angle_change_rad": 1.0583721399282098e-13,
+    "manual_preparation_energy_mJ": 1.2193220435149574,
+    "relative_energy_error": 1.1309145484761411e-10,
+    "events": [
+      {
+        "edge": 44,
+        "source": 30,
+        "target": 36,
+        "last_before_s": 0.13333333333333333,
+        "first_after_s": 0.26666666666666666,
+        "Q_before": [
+          3,
+          -1
+        ],
+        "Q_after": [
+          1,
+          1
+        ],
+        "ice_defect": false,
+        "excess_charge": true
+      },
+      {
+        "edge": 27,
+        "source": 24,
+        "target": 18,
+        "last_before_s": 1.5666666666666667,
+        "first_after_s": 2.066666666666667,
+        "Q_before": [
+          1,
+          -1
+        ],
+        "Q_after": [
+          -1,
+          1
+        ],
+        "ice_defect": false,
+        "excess_charge": true
+      }
+    ]
+  },
+  {
+    "field_mT": 1.3000000000000003,
+    "background": {
+      "energy_J": -0.013765882825494643,
+      "max_torque_Nm": 1.7098207073275307e-17,
+      "min_curvature_J_rad2": 0.000308264366786965
+    },
+    "control_max_angle_change_rad": 1.4876988529977098e-13,
+    "manual_preparation_energy_mJ": 0.9492676012189654,
+    "relative_energy_error": 1.8294802898991053e-10,
+    "events": [
+      {
+        "edge": 44,
+        "source": 30,
+        "target": 36,
+        "last_before_s": 0.12083333333333333,
+        "first_after_s": 0.20833333333333334,
+        "Q_before": [
+          3,
+          -1
+        ],
+        "Q_after": [
+          1,
+          1
+        ],
+        "ice_defect": false,
+        "excess_charge": true
+      },
+      {
+        "edge": 44,
+        "source": 36,
+        "target": 30,
+        "last_before_s": 0.3375,
+        "first_after_s": 0.43333333333333335,
+        "Q_before": [
+          1,
+          1
+        ],
+        "Q_after": [
+          -1,
+          3
+        ],
+        "ice_defect": false,
+        "excess_charge": true
+      },
+      {
+        "edge": 44,
+        "source": 30,
+        "target": 36,
+        "last_before_s": 0.8041666666666667,
+        "first_after_s": 0.9125,
+        "Q_before": [
+          3,
+          -1
+        ],
+        "Q_after": [
+          1,
+          1
+        ],
+        "ice_defect": false,
+        "excess_charge": true
+      },
+      {
+        "edge": 27,
+        "source": 24,
+        "target": 18,
+        "last_before_s": 0.8166666666666667,
+        "first_after_s": 0.9666666666666667,
+        "Q_before": [
+          -3,
+          -1
+        ],
+        "Q_after": [
+          -1,
+          -3
+        ],
+        "ice_defect": true,
+        "excess_charge": true
+      },
+      {
+        "edge": 44,
+        "source": 36,
+        "target": 30,
+        "last_before_s": 1.0625,
+        "first_after_s": 1.1958333333333333,
+        "Q_before": [
+          1,
+          1
+        ],
+        "Q_after": [
+          -1,
+          3
+        ],
+        "ice_defect": false,
+        "excess_charge": true
+      },
+      {
+        "edge": 44,
+        "source": 30,
+        "target": 36,
+        "last_before_s": 1.375,
+        "first_after_s": 1.5125,
+        "Q_before": [
+          3,
+          -1
+        ],
+        "Q_after": [
+          1,
+          1
+        ],
+        "ice_defect": false,
+        "excess_charge": true
+      },
+      {
+        "edge": 44,
+        "source": 36,
+        "target": 30,
+        "last_before_s": 1.675,
+        "first_after_s": 1.8625,
+        "Q_before": [
+          1,
+          1
+        ],
+        "Q_after": [
+          -1,
+          3
+        ],
+        "ice_defect": false,
+        "excess_charge": true
+      },
+      {
+        "edge": 44,
+        "source": 30,
+        "target": 36,
+        "last_before_s": 1.9208333333333334,
+        "first_after_s": 2.1125,
+        "Q_before": [
+          3,
+          -1
+        ],
+        "Q_after": [
+          1,
+          1
+        ],
+        "ice_defect": false,
+        "excess_charge": true
+      }
+    ]
+  }
+]
