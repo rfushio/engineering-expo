@@ -1,0 +1,1 @@
+run_id,date,stage,geometry_version,part_version,rotor_ids,bearing,delta_mm,preparation,interaction_condition,release_spread_frames,fps,video_file,mass_g,threshold_plus_uNm,threshold_minus_uNm,clearance_mm,n_moved,n3,n_ice,n_defect,n_unknown,f_ice,unclassified_fraction,classification_rule,notes

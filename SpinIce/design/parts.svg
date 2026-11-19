@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 305">
+<title>A1 部品断面図 寸法 mm</title>
+<rect width="860" height="305" fill="#fff"/>
+<g font-family="sans-serif" fill="#182e37">
+<text x="24" y="29" font-size="21">A1 部品断面　｜　公称寸法 mm・模式図</text>
+<text x="24" y="67">端部ケース（長手断面）</text><text x="430" y="67">支点（長手に直交する断面）</text>
+<g stroke="#224851" stroke-width="2">
+<rect x="36" y="108" width="204" height="88" fill="#cfe5df"/>
+<rect x="138" y="123" width="85" height="58" fill="#dc8862"/>
+<rect x="25" y="135" width="113" height="32" fill="#ecd494"/>
+<path d="M 36 206 v10 h204 v-10 M138 101 v-10 h85 v10" fill="none"/>
+<path d="M460 108 h33 v27 l-8 7 8 7 v74 h-33z M730 108 h-33 v27 l8 7 -8 7 v74 h33z" fill="#cfe5df"/>
+<path d="M485 142 l12 -5 h196 l12 5 -12 5 H497z" fill="#cdab60"/>
+<rect x="554" y="116" width="82" height="52" fill="#90b9bc"/>
+<circle cx="595" cy="142" r="6" fill="#224851"/>
+<path d="M485 96 v-9 h220 v9 M493 188 v10 h204 v-10" fill="none"/>
+</g>
+<g font-size="15">
+<text x="146" y="86">5 磁石</text><text x="64" y="156">竹芯</text><text x="153" y="156">φ5</text>
+<text x="109" y="239">12</text><text x="250" y="153">外壁 1</text>
+<text x="27" y="271">芯のつかみ 6 ／ 外径 8</text>
+<text x="563" y="83">軸長 22</text><text x="553" y="218">内面間 20</text>
+<text x="435" y="252">支点高さ 60 ／ ハブ幅 8 ／ 軸径 2</text>
+<text x="435" y="277">円錐の軸端 60°・受け 90°</text>
+</g></g></svg>

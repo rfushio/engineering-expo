@@ -1,0 +1,13 @@
+q [A m]: 19.634954084936208
+mu_rotor [A m^2]: 0.19634954084936207
+all-in energy [mJ]: 0.5212572098907686
+two-in one-out planar energy [mJ]: -0.17375240329692335
+gap [mJ]: 0.6950096131876919
+canted angles [deg]: [  5.77339398  -5.77339398 180.        ]
+canted energy [mJ]: -0.19851838093649002
+finite-difference step: 0.001
+gradient [J/rad]: [-6.47776097e-09  6.47776058e-09  1.89735380e-16]
+Hessian eigenvalues [J/rad^2]: [0.00062288 0.0059711  0.00907547]
+finite-difference step: 0.0001
+gradient [J/rad]: [-4.73460247e-11  4.73465668e-11  2.57498016e-15]
+Hessian eigenvalues [J/rad^2]: [0.0006229  0.00597138 0.00907555]
